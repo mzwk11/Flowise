@@ -1,4 +1,4 @@
-import { INodeParams, INodeCredential } from '../src/Interface'
+import { INodeParams, INodeCredential } from '../../src/Interface'
 
 class AzureAIFoundryApi implements INodeCredential {
     label: string
@@ -9,7 +9,7 @@ class AzureAIFoundryApi implements INodeCredential {
 
     constructor() {
         this.label = 'Azure AI Foundry API'
-        this.name = 'azureAIFoundryApi'   // <<< NAZWA CREDENCIALA
+        this.name = 'azureAIFoundryApi'
         this.version = 1.0
         this.description = 'Use Azure AI Foundry Model Inference endpoint.'
         this.inputs = [
