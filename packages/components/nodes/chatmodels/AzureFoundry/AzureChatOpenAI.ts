@@ -1,17 +1,8 @@
 import { BaseCache } from '@langchain/core/caches'
 import { ChatOpenAI as LcChatOpenAI } from '@langchain/openai'
-import {
-    ICommonObject,
-    INode,
-    INodeData,
-    INodeOptionsValue,
-    INodeParams
-} from '../../../src/Interface'
+import { ICommonObject, INode, INodeData, INodeOptionsValue, INodeParams } from '../../../src/Interface'
 import { getBaseClasses, getCredentialData, getCredentialParam } from '../../../src/utils'
 
-/**
- * Rozszerzamy ChatOpenAI o drobne helpery
- */
 class ChatAzureAIFoundry extends LcChatOpenAI {
     id: string
     configuredModel: string
@@ -46,18 +37,15 @@ class AzureAIFoundry_ChatModels implements INode {
         this.category = 'Chat Models'
         this.description =
             'Azure AI Foundry Models endpoint (OpenAI-compatible chat completions, np. DeepSeek, Phi, Mistral, GPT)'
-
         this.baseClasses = [this.type, ...getBaseClasses(ChatAzureAIFoundry)]
 
-        // Credential z FlowiseAzureChatOpenAI.ts
         this.credential = {
             label: 'Connect Credential',
             name: 'credential',
             type: 'credential',
             credentialNames: ['azureAIFoundryApi'],
             optional: false,
-            description:
-                'Azure AI Foundry endpoint (https://<resource>.services.ai.azure.com/models) + API key'
+            description: 'Azure AI Foundry endpoint (https://<resource>.services.ai.azure.com/models) + API key'
         }
 
         this.inputs = [
@@ -72,8 +60,7 @@ class AzureAIFoundry_ChatModels implements INode {
                 name: 'model',
                 type: 'string',
                 placeholder: 'deepseek-r1 / phi-4 / mistral-large-2411 / gpt-4.1-mini',
-                description:
-                    'Nazwa / ID modelu (deploymentu) w Azure AI Foundry – użytkownik wpisuje ręcznie.'
+                description: 'Nazwa / ID modelu (deploymentu) w Azure AI Foundry – użytkownik wpisuje ręcznie.'
             },
             {
                 label: 'Temperature',
@@ -115,7 +102,6 @@ class AzureAIFoundry_ChatModels implements INode {
                 optional: true,
                 additionalParams: true
             },
-            // ---- api-version helper ----
             {
                 label: 'API Version',
                 name: 'apiVersion',
@@ -126,7 +112,6 @@ class AzureAIFoundry_ChatModels implements INode {
                 additionalParams: true,
                 optional: true
             },
-            // ---- proste multimodal ----
             {
                 label: 'Allow Image Inputs',
                 name: 'allowImageInputs',
@@ -140,10 +125,10 @@ class AzureAIFoundry_ChatModels implements INode {
         ]
     }
 
+    // eslint/prettier lubi taki prosty, pusty loadMethods
     //@ts-ignore
     loadMethods = {
         async listModels(): Promise<INodeOptionsValue[]> {
-            // Możesz tu w przyszłości zaciągać listę modeli z własnego API
             return []
         }
     }
@@ -161,7 +146,6 @@ class AzureAIFoundry_ChatModels implements INode {
 
         if (!model) throw new Error('Model name is required')
 
-        // --- Credentials z azureAIFoundryApi ---
         const credentialData = await getCredentialData(nodeData.credential ?? '', options)
 
         let endpoint = getCredentialParam('azureAIFoundryEndpoint', credentialData, nodeData) as string
@@ -170,40 +154,16 @@ class AzureAIFoundry_ChatModels implements INode {
         if (!endpoint) throw new Error('Azure AI Foundry endpoint is not set')
         if (!apiKey) throw new Error('Azure AI Foundry API key is not set')
 
-        // Normalizacja endpointu
         endpoint = endpoint.trim()
         if (endpoint.endsWith('/')) endpoint = endpoint.slice(0, -1)
 
-        // upewniamy się, że kończy się na /models
         if (!endpoint.endsWith('/models')) {
-            throw new Error(
-                `Azure AI Foundry endpoint should end with /models, got: ${endpoint}`
-            )
+            throw new Error(`Azure AI Foundry endpoint should end with /models, got: ${endpoint}`)
         }
 
-        /**
-         * Doklejanie api-version:
-         * ChatOpenAI dorzuca /chat/completions do baseURL,
-         * więc my ustawiamy baseURL na:
-         *
-         *   https://<resource>.services.ai.azure.com/models?api-version=...
-         *
-         * i wychodzi finalnie:
-         *
-         *   POST https://.../models?api-version=.../chat/completions
-         *
-         * (niestety to trochę brzydkie, bo w idealnym świecie apiVersion byłby w path,
-         *  ale w praktyce działa – jeżeli wolisz path, możesz zrobić proxy po swojej stronie).
-         */
-
-        let baseURL = endpoint
-        if (apiVersion) {
-            // jeśli endpoint nie ma query, dodajemy ?api-version=...
-            const hasQuery = endpoint.includes('?')
-            baseURL = hasQuery
-                ? `${endpoint}&api-version=${apiVersion}`
-                : `${endpoint}?api-version=${apiVersion}`
-        }
+        const baseURL = apiVersion
+            ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}api-version=${apiVersion}`
+            : endpoint
 
         const llmConfig: any = {
             model,
@@ -212,7 +172,6 @@ class AzureAIFoundry_ChatModels implements INode {
             apiKey,
             configuration: {
                 baseURL,
-                // Foundry akceptuje zarówno Authorization: Bearer, jak i api-key
                 defaultHeaders: {
                     'api-key': apiKey
                 }
@@ -223,19 +182,7 @@ class AzureAIFoundry_ChatModels implements INode {
         if (topP) llmConfig.topP = parseFloat(topP)
         if (topK) llmConfig.topK = parseInt(topK, 10)
         if (cache) llmConfig.cache = cache
-
-        /**
-         * Multimodal:
-         * - LangChain OpenAI przyjmuje content z elementami typu { type: "image_url", image_url: { url: ... } }
-         * - Jeśli allowImageInputs = true, Flowise może tworzyć takie message content (własne node’y / custom code).
-         * - Ten node nic nie blokuje – tylko daje informację, że model może to obsłużyć.
-         *   (Jeśli Twój deployment DeepSeek/phi/mistral w Foundry wspiera obrazy, po prostu będzie działać).
-         */
-        if (allowImageInputs) {
-            // Tutaj nie ma specjalnego pola w ChatOpenAI,
-            // ale możesz np. dodać własną flagę, którą inne node’y w Flowise przeczytają:
-            llmConfig._allowImageInputs = true
-        }
+        if (allowImageInputs) llmConfig._allowImageInputs = true
 
         const modelInstance = new ChatAzureAIFoundry(nodeData.id, llmConfig)
         return modelInstance
