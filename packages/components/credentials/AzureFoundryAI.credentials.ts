@@ -9,10 +9,9 @@ class AzureAIFoundryApi implements INodeCredential {
 
     constructor() {
         this.label = 'Azure AI Foundry API'
-        this.name = 'azureAIFoundryApi'
+        this.name = 'azureAIFoundryApi'   // <<< NAZWA CREDENCIALA
         this.version = 1.0
-        this.description =
-            'Use Azure AI Foundry Model Inference endpoint.'
+        this.description = 'Use Azure AI Foundry Model Inference endpoint.'
         this.inputs = [
             {
                 label: 'Azure AI Foundry Endpoint',
